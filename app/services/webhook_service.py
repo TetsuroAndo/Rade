@@ -138,8 +138,6 @@ class WebhookService:
 
                 # If html_url is not in pull_request, construct it
                 if not pr_url:
-                    owner = repo.get("owner", {}).get("login") or repo_full_name.split("/")[0]
-                    repo_name = repo.get("name") or repo_full_name.split("/")[-1]
                     pr_url = f"https://github.com/{repo_full_name}/pull/{pr_number}"
 
             # Handle pull_request_review_comment event

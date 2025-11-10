@@ -148,8 +148,8 @@ class SessionMonitor:
                 )
             else:
                 comment_body = (
-                    f"✅ Devinセッションが完了しました。\n\n"
-                    f"新しいPRのURLを取得できませんでした。"
+                    "✅ Devinセッションが完了しました。\n\n"
+                    "新しいPRのURLを取得できませんでした。"
                 )
 
             success = await self.github_client.create_comment(
