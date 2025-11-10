@@ -1,5 +1,4 @@
 """Unit tests for security module."""
-import pytest
 from app.core.security import verify_github_signature
 import hmac
 import hashlib

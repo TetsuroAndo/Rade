@@ -1,5 +1,5 @@
 import httpx
-from typing import Optional, Dict, Any
+from typing import Dict, Any
 from app.core.config import settings
 from app.core.logging_config import get_logger
 from app.core.exceptions import DevinAPIError, ConfigurationError

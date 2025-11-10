@@ -1,7 +1,7 @@
 """Unit tests for GitHubClient."""
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
-from httpx import Response, Request
+from unittest.mock import AsyncMock, MagicMock
+from httpx import Request
 from app.clients.github_client import GitHubClient
 from app.core.exceptions import GitHubAPIError
 

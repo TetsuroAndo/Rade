@@ -1,6 +1,6 @@
 """Unit tests for WebhookService."""
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 from app.services.webhook_service import WebhookService
 from app.clients.devin_client import DevinClient
 from app.repositories.session_repository import SessionRepository

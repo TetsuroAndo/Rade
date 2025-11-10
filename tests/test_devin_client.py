@@ -1,7 +1,7 @@
 """Unit tests for DevinClient."""
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
-from httpx import Response, Request
+from httpx import Request
 from app.clients.devin_client import DevinClient
 from app.core.exceptions import DevinAPIError, ConfigurationError
 

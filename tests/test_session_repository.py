@@ -1,7 +1,5 @@
 """Unit tests for SessionRepository."""
 import pytest
-import json
-import tempfile
 from pathlib import Path
 from app.repositories.session_repository import SessionRepository
 from app.core.exceptions import RepositoryError, SessionNotFoundError
@@ -25,7 +23,7 @@ class TestSessionRepositoryInit:
     def test_init_creates_directory(self, tmp_path):
         """Test that initialization creates directory."""
         db_path = str(tmp_path / "subdir" / "sessions.json")
-        repo = SessionRepository(db_path=db_path)
+        SessionRepository(db_path=db_path)
         assert Path(db_path).parent.exists()
 
     def test_init_creates_empty_db(self, temp_db_path):

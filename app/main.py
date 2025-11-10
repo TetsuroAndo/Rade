@@ -1,12 +1,11 @@
 """FastAPI application for GitHub webhook receiver."""
-import logging
 from fastapi import FastAPI, Request, BackgroundTasks, HTTPException
 from fastapi.responses import JSONResponse
 from app.services.webhook_service import WebhookService
 from app.core.security import verify_github_signature
 from app.core.config import settings
 from app.core.logging_config import setup_logging, get_logger
-from app.core.exceptions import SecurityError, WebhookProcessingError
+from app.core.exceptions import SecurityError
 
 # Configure logging
 setup_logging(level="INFO")
