@@ -19,19 +19,24 @@ GitHub Webhookをトリガーに、Devin APIを使用してコードレビュー
 - [x] API層の実装
 - [x] 監視プロセスの実装
 - [x] 環境変数テンプレートの作成 (`.env.example`)
+- [x] カスタム例外クラスの実装 (`app/core/exceptions.py`)
+- [x] ロギング設定の改善 (`app/core/logging_config.py`)
+- [x] エラーハンドリングの強化（全レイヤー）
+- [x] ユニットテストの作成（pytest）
 
 ### 🔄 進行中のタスク
-
-- [ ] テストの作成
-- [ ] エラーハンドリングの強化
-- [ ] ロギングの改善
-
-### ⏳ 未着手のタスク
 
 - [ ] 統合テストの作成
 - [ ] デプロイ設定
 - [ ] ドキュメントの整備（API仕様書など）
 - [ ] パフォーマンス最適化
+
+### ⏳ 未着手のタスク
+
+- [ ] E2Eテストの作成
+- [ ] CI/CDパイプラインの設定
+- [ ] メトリクス収集（Prometheus等）
+- [ ] エラーレポート機能（Sentry等）
 
 ## 実装詳細
 
@@ -60,6 +65,14 @@ GitHub Webhookをトリガーに、Devin APIを使用してコードレビュー
 ├── .env.example          # ✅ 環境変数の例
 ├── data/                 # ✅ セッション状態保存ディレクトリ
 ├── pyproject.toml        # ✅ 依存関係定義
+├── tests/                # ✅ テストスイート
+│   ├── __init__.py
+│   ├── test_exceptions.py
+│   ├── test_security.py
+│   ├── test_devin_client.py
+│   ├── test_github_client.py
+│   ├── test_session_repository.py
+│   └── test_webhook_service.py
 └── docs/
     ├── design.md         # ✅ 設計書
     ├── development.md    # ✅ このファイル
@@ -193,12 +206,54 @@ GitHub Webhookをトリガーに、Devin APIを使用してコードレビュー
 - 設定可能なポーリング間隔（デフォルト30秒）
 - エラーハンドリングとロギング
 
+#### フェーズ8: エラーハンドリングとテストの実装
+
+**ステータス**: ✅ 完了
+
+- [x] `app/core/exceptions.py` - カスタム例外クラス
+- [x] `app/core/logging_config.py` - ロギング設定の改善
+- [x] ユニットテストスイートの作成
+
+**実装内容**:
+- **exceptions.py**: 階層的な例外クラス体系を実装
+  - `RadeException`: 基底例外クラス
+  - `ConfigurationError`: 設定エラー
+  - `SecurityError`: セキュリティエラー
+  - `DevinAPIError`: Devin APIエラー（HTTPステータスコードとレスポンスボディを含む）
+  - `GitHubAPIError`: GitHub APIエラー（HTTPステータスコードとレスポンスボディを含む）
+  - `RepositoryError`: リポジトリエラー
+  - `WebhookProcessingError`: Webhook処理エラー
+  - `SessionNotFoundError`: セッション未検出エラー
+- **logging_config.py**: 構造化ロギング設定を実装
+  - `setup_logging()`: アプリケーション全体のロギング設定
+  - `get_logger()`: モジュール用ロガー取得関数
+  - ファイル名と行番号を含む詳細なログフォーマット
+  - サードパーティライブラリのログレベル調整
+- **エラーハンドリングの強化**: 全レイヤーに適用
+  - クライアント層: APIエラーを適切な例外に変換
+  - リポジトリ層: データアクセスエラーを例外として処理
+  - サービス層: ビジネスロジックエラーを適切に伝播
+  - API層: バックグラウンドタスクでのエラーハンドリング強化
+- **ユニットテスト**: pytestを使用した包括的なテストスイート
+  - `test_exceptions.py`: 例外クラスのテスト
+  - `test_security.py`: セキュリティモジュールのテスト
+  - `test_devin_client.py`: DevinClientのテスト（モック使用）
+  - `test_github_client.py`: GitHubClientのテスト（モック使用）
+  - `test_session_repository.py`: SessionRepositoryのテスト
+  - `test_webhook_service.py`: WebhookServiceのテスト（モック使用）
+- **テスト設定**: `pyproject.toml`にpytest設定を追加
+  - pytest、pytest-asyncio、pytest-cov、pytest-mockを依存関係に追加
+  - カバレッジレポート設定
+  - テストパスとファイルパターンの設定
+
 ## 技術スタック
 
 - **Webフレームワーク**: FastAPI
 - **HTTPクライアント**: httpx (非同期)
 - **設定管理**: pydantic-settings
 - **状態管理**: JSONファイル（初期実装）、将来的にRedis対応予定
+- **パッケージマネージャー**: uv
+- **テストフレームワーク**: pytest
 - **Pythonバージョン**: >=3.13
 
 ## アーキテクチャ
@@ -228,6 +283,16 @@ GitHub Webhookをトリガーに、Devin APIを使用してコードレビュー
    - セッション状態の監視と完了処理
 
 ## 使用方法
+
+### 0. 依存関係のインストール
+
+```bash
+# uvを使用して依存関係をインストール
+uv sync
+
+# または、直接インストールする場合
+uv pip install -e .
+```
 
 ### 1. 環境変数の設定
 
@@ -271,15 +336,48 @@ GitHubリポジトリの設定で、Webhook URLを設定：
 - ⚠️ GitHubトークンは任意ですが、PRへのコメント投稿には必要です
 - ⚠️ 監視プロセスは独立して実行する必要があります（cronやsystemdで自動起動推奨）
 
+## テストの実行方法
+
+### テスト依存関係のインストール
+
+```bash
+# uvを使用してテスト依存関係をインストール
+uv sync --extra test
+
+# または、直接インストールする場合
+uv pip install -e ".[test]"
+```
+
+### テストの実行
+
+```bash
+# 全テストの実行
+pytest
+
+# カバレッジレポート付きで実行
+pytest --cov=app --cov-report=html
+
+# 特定のテストファイルの実行
+pytest tests/test_security.py
+
+# 詳細出力で実行
+pytest -v
+```
+
+### テストカバレッジ
+
+テストカバレッジレポートは`htmlcov/index.html`に生成されます。
+
 ## 今後の改善予定
 
-- [ ] ユニットテストの追加
-- [ ] 統合テストの追加
+- [ ] 統合テストの追加（実際のAPIとの通信を含む）
+- [ ] E2Eテストの追加
 - [ ] Redisへの移行（スケーラビリティ向上）
 - [ ] メトリクス収集（Prometheus等）
 - [ ] エラーレポート機能（Sentry等）
 - [ ] Docker化とデプロイ設定
 - [ ] API仕様書の作成（OpenAPI/Swagger）
+- [ ] CI/CDパイプラインの設定
 
 ## 変更履歴
 
@@ -289,3 +387,11 @@ GitHubリポジトリの設定で、Webhook URLを設定：
 - ✅ Webhookレシーバーの実装完了
 - ✅ 監視プロセスの実装完了
 - ✅ 開発ドキュメントの作成
+
+### 2024年 - エラーハンドリングとテストの強化
+
+- ✅ カスタム例外クラス体系の実装
+- ✅ ロギング設定の改善（構造化ロギング）
+- ✅ 全レイヤーへのエラーハンドリング強化
+- ✅ 包括的なユニットテストスイートの作成
+- ✅ pytest設定とテスト依存関係の追加

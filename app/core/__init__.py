@@ -1,2 +1,22 @@
-# app/core/__init__.py
-"""Core modules for configuration and security."""
+"""Core modules for the Rade application."""
+from app.core.exceptions import (
+    RadeException,
+    ConfigurationError,
+    SecurityError,
+    DevinAPIError,
+    GitHubAPIError,
+    RepositoryError,
+    WebhookProcessingError,
+    SessionNotFoundError,
+)
+
+__all__ = [
+    "RadeException",
+    "ConfigurationError",
+    "SecurityError",
+    "DevinAPIError",
+    "GitHubAPIError",
+    "RepositoryError",
+    "WebhookProcessingError",
+    "SessionNotFoundError",
+]

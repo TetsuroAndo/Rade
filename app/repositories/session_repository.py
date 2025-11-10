@@ -1,11 +1,12 @@
 """Session repository for managing pending Devin sessions."""
 import json
-import logging
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 from app.core.config import settings
+from app.core.logging_config import get_logger
+from app.core.exceptions import RepositoryError, SessionNotFoundError
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class SessionRepository:
@@ -33,11 +34,13 @@ class SessionRepository:
             content = self.db_path.read_text(encoding="utf-8")
             return json.loads(content) if content.strip() else []
         except json.JSONDecodeError as e:
-            logger.error(f"Error reading session database: {e}")
-            return []
+            error_msg = f"Error reading session database: {e}"
+            logger.error(error_msg, extra={"db_path": str(self.db_path)})
+            raise RepositoryError(error_msg)
         except Exception as e:
-            logger.error(f"Unexpected error reading session database: {e}")
-            return []
+            error_msg = f"Unexpected error reading session database: {e}"
+            logger.error(error_msg, exc_info=True, extra={"db_path": str(self.db_path)})
+            raise RepositoryError(error_msg)
 
     def _write_db(self, data: List[Dict[str, Any]]):
         """Write session database to file."""
@@ -46,7 +49,9 @@ class SessionRepository:
                 json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8"
             )
         except Exception as e:
-            logger.error(f"Error writing session database: {e}")
+            error_msg = f"Error writing session database: {e}"
+            logger.error(error_msg, exc_info=True, extra={"db_path": str(self.db_path)})
+            raise RepositoryError(error_msg)
 
     def add_pending_session(
         self,
@@ -116,9 +121,14 @@ class SessionRepository:
 
         if updated:
             self._write_db(data)
-            logger.info(f"Marked session {session_id} as completed")
+            logger.info(
+                f"Marked session {session_id} as completed",
+                extra={"session_id": session_id, "new_pr_url": new_pr_url},
+            )
         else:
-            logger.warning(f"Session {session_id} not found in database")
+            error_msg = f"Session {session_id} not found in database"
+            logger.warning(error_msg, extra={"session_id": session_id})
+            raise SessionNotFoundError(error_msg)
 
     def mark_session_failed(self, session_id: str, error_message: Optional[str] = None):
         """
@@ -141,9 +151,14 @@ class SessionRepository:
 
         if updated:
             self._write_db(data)
-            logger.info(f"Marked session {session_id} as failed")
+            logger.info(
+                f"Marked session {session_id} as failed",
+                extra={"session_id": session_id, "error_message": error_message},
+            )
         else:
-            logger.warning(f"Session {session_id} not found in database")
+            error_msg = f"Session {session_id} not found in database"
+            logger.warning(error_msg, extra={"session_id": session_id})
+            raise SessionNotFoundError(error_msg)
 
     def get_session(self, session_id: str) -> Optional[Dict[str, Any]]:
         """

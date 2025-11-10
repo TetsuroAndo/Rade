@@ -1,9 +1,10 @@
 """GitHub API client for PR management and comments."""
 import httpx
-import logging
 from typing import Optional, Dict, Any
+from app.core.logging_config import get_logger
+from app.core.exceptions import GitHubAPIError
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class GitHubClient:
@@ -47,11 +48,15 @@ class GitHubClient:
             body: Comment body
 
         Returns:
-            True if successful, False otherwise
+            True if successful
+
+        Raises:
+            GitHubAPIError: If comment creation fails
         """
         if not self.token:
-            logger.error("GitHub token not configured")
-            return False
+            error_msg = "GitHub token not configured"
+            logger.error(error_msg)
+            raise GitHubAPIError(error_msg)
 
         try:
             response = await self.client.post(
@@ -59,25 +64,37 @@ class GitHubClient:
                 json={"body": body},
             )
             response.raise_for_status()
-            logger.info(f"Comment created on {owner}/{repo}#{issue_number}")
+            logger.info(
+                f"Comment created on {owner}/{repo}#{issue_number}",
+                extra={"owner": owner, "repo": repo, "issue_number": issue_number},
+            )
             return True
 
         except httpx.HTTPStatusError as e:
+            error_msg = f"GitHub API HTTP error creating comment: {e.response.status_code}"
             logger.error(
-                f"GitHub API HTTP error creating comment: "
-                f"{e.response.status_code} - {e.response.text}"
+                f"{error_msg} - {e.response.text[:200]}",
+                extra={"status_code": e.response.status_code},
             )
-            return False
+            raise GitHubAPIError(
+                error_msg,
+                status_code=e.response.status_code,
+                response_body=e.response.text,
+            )
         except httpx.RequestError as e:
-            logger.error(f"GitHub API request error creating comment: {e}")
-            return False
+            error_msg = f"GitHub API request error creating comment: {e}"
+            logger.error(error_msg)
+            raise GitHubAPIError(error_msg)
+        except GitHubAPIError:
+            raise
         except Exception as e:
-            logger.error(f"Unexpected error creating GitHub comment: {e}")
-            return False
+            error_msg = f"Unexpected error creating GitHub comment: {e}"
+            logger.error(error_msg, exc_info=True)
+            raise GitHubAPIError(error_msg)
 
     async def get_pr_info(
         self, owner: str, repo: str, pr_number: int
-    ) -> Optional[Dict[str, Any]]:
+    ) -> Dict[str, Any]:
         """
         Get PR information.
 
@@ -87,7 +104,10 @@ class GitHubClient:
             pr_number: PR number
 
         Returns:
-            PR information dict if successful, None otherwise
+            PR information dict
+
+        Raises:
+            GitHubAPIError: If getting PR info fails
         """
         try:
             response = await self.client.get(f"/repos/{owner}/{repo}/pulls/{pr_number}")
@@ -95,17 +115,26 @@ class GitHubClient:
             return response.json()
 
         except httpx.HTTPStatusError as e:
+            error_msg = f"GitHub API HTTP error getting PR info: {e.response.status_code}"
             logger.error(
-                f"GitHub API HTTP error getting PR info: "
-                f"{e.response.status_code} - {e.response.text}"
+                f"{error_msg} - {e.response.text[:200]}",
+                extra={"status_code": e.response.status_code},
             )
-            return None
+            raise GitHubAPIError(
+                error_msg,
+                status_code=e.response.status_code,
+                response_body=e.response.text,
+            )
         except httpx.RequestError as e:
-            logger.error(f"GitHub API request error getting PR info: {e}")
-            return None
+            error_msg = f"GitHub API request error getting PR info: {e}"
+            logger.error(error_msg)
+            raise GitHubAPIError(error_msg)
+        except GitHubAPIError:
+            raise
         except Exception as e:
-            logger.error(f"Unexpected error getting PR info: {e}")
-            return None
+            error_msg = f"Unexpected error getting PR info: {e}"
+            logger.error(error_msg, exc_info=True)
+            raise GitHubAPIError(error_msg)
 
     async def close(self):
         """Close the HTTP client."""

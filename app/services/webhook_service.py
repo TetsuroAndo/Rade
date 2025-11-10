@@ -1,11 +1,16 @@
 """Webhook service for processing GitHub webhook events."""
-import logging
 from typing import Optional, Dict, Any
 from app.clients.devin_client import DevinClient
 from app.repositories.session_repository import SessionRepository
 from app.core.config import settings
+from app.core.logging_config import get_logger
+from app.core.exceptions import (
+    WebhookProcessingError,
+    DevinAPIError,
+    RepositoryError,
+)
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class WebhookService:
@@ -58,28 +63,41 @@ class WebhookService:
             )
 
         except Exception as e:
-            logger.error(f"Error extracting information from payload: {e}")
-            return False
+            error_msg = f"Error extracting information from payload: {e}"
+            logger.error(error_msg, exc_info=True)
+            raise WebhookProcessingError(error_msg) from e
 
         # 3. Build Devin prompt
         prompt = self._build_devin_prompt(pr_url, comment_body)
 
         # 4. Create Devin session
-        session_id = await self.devin_client.create_session(prompt)
-        if not session_id:
-            logger.error("Failed to create Devin session")
-            return False
+        try:
+            session_id = await self.devin_client.create_session(prompt)
+        except DevinAPIError as e:
+            error_msg = f"Failed to create Devin session: {e.message}"
+            logger.error(error_msg, extra={"pr_url": pr_url})
+            raise WebhookProcessingError(error_msg) from e
 
         # 5. Save session to repository for monitoring
-        self.session_repo.add_pending_session(
-            session_id=session_id,
-            original_pr_number=original_pr_number,
-            repo_full_name=repo_full_name,
-            comment_body=comment_body,
-        )
+        try:
+            self.session_repo.add_pending_session(
+                session_id=session_id,
+                original_pr_number=original_pr_number,
+                repo_full_name=repo_full_name,
+                comment_body=comment_body,
+            )
+        except RepositoryError as e:
+            error_msg = f"Failed to save session to repository: {e.message}"
+            logger.error(error_msg, extra={"session_id": session_id})
+            raise WebhookProcessingError(error_msg) from e
 
         logger.info(
-            f"Successfully created Devin session {session_id} for {repo_full_name}#{original_pr_number}"
+            f"Successfully created Devin session {session_id} for {repo_full_name}#{original_pr_number}",
+            extra={
+                "session_id": session_id,
+                "repo_full_name": repo_full_name,
+                "original_pr_number": original_pr_number,
+            },
         )
         return True
 

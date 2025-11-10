@@ -5,13 +5,12 @@ from fastapi.responses import JSONResponse
 from app.services.webhook_service import WebhookService
 from app.core.security import verify_github_signature
 from app.core.config import settings
+from app.core.logging_config import setup_logging, get_logger
+from app.core.exceptions import SecurityError, WebhookProcessingError
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-)
-logger = logging.getLogger(__name__)
+setup_logging(level="INFO")
+logger = get_logger(__name__)
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -48,8 +47,11 @@ async def handle_github_webhook(
 
     # 2. Verify GitHub signature
     signature = request.headers.get("X-Hub-Signature-256")
-    if not verify_github_signature(body, signature, settings.github_webhook_secret):
-        logger.warning("Invalid webhook signature")
+    try:
+        if not verify_github_signature(body, signature, settings.github_webhook_secret):
+            logger.warning("Invalid webhook signature")
+            raise SecurityError("Invalid webhook signature")
+    except SecurityError:
         raise HTTPException(status_code=403, detail="Invalid signature")
 
     # 3. Parse JSON payload
@@ -65,7 +67,19 @@ async def handle_github_webhook(
 
     # 5. Process webhook asynchronously
     webhook_service = WebhookService()
-    background_tasks.add_task(webhook_service.process_webhook, payload)
+
+    async def process_with_error_handling(payload: dict):
+        """Process webhook with proper error handling."""
+        try:
+            await webhook_service.process_webhook(payload)
+        except Exception as e:
+            logger.error(
+                f"Error processing webhook: {e}",
+                exc_info=True,
+                extra={"event_type": event_type},
+            )
+
+    background_tasks.add_task(process_with_error_handling, payload)
 
     # 6. Return immediate response to avoid GitHub timeout
     return JSONResponse(

@@ -1,19 +1,22 @@
 """Monitor script for polling Devin session status."""
 import asyncio
-import logging
 import sys
 from typing import Optional, Dict, Any
 from app.clients.devin_client import DevinClient
 from app.clients.github_client import GitHubClient
 from app.repositories.session_repository import SessionRepository
 from app.core.config import settings
+from app.core.logging_config import setup_logging, get_logger
+from app.core.exceptions import (
+    DevinAPIError,
+    GitHubAPIError,
+    RepositoryError,
+    SessionNotFoundError,
+)
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-)
-logger = logging.getLogger(__name__)
+setup_logging(level="INFO")
+logger = get_logger(__name__)
 
 
 class SessionMonitor:
@@ -53,9 +56,13 @@ class SessionMonitor:
         logger.debug(f"Checking session {session_id}")
 
         # Get session status from Devin API
-        session_data = await self.devin_client.get_session_status(session_id)
-        if not session_data:
-            logger.warning(f"Could not get status for session {session_id}")
+        try:
+            session_data = await self.devin_client.get_session_status(session_id)
+        except DevinAPIError as e:
+            logger.error(
+                f"Failed to get status for session {session_id}: {e.message}",
+                extra={"session_id": session_id},
+            )
             return
 
         status_enum = session_data.get("status_enum", "").lower()
@@ -69,9 +76,18 @@ class SessionMonitor:
             await self._handle_finished_session(session, session_data)
 
         elif status_enum == "blocked":
-            logger.warning(f"Session {session_id} is blocked")
+            logger.warning(
+                f"Session {session_id} is blocked",
+                extra={"session_id": session_id},
+            )
             error_message = session_data.get("error_message", "Session blocked")
-            self.session_repo.mark_session_failed(session_id, error_message)
+            try:
+                self.session_repo.mark_session_failed(session_id, error_message)
+            except (RepositoryError, SessionNotFoundError) as e:
+                logger.error(
+                    f"Failed to mark session as failed: {e.message}",
+                    extra={"session_id": session_id},
+                )
 
         else:
             logger.warning(f"Unknown status '{status_enum}' for session {session_id}")
@@ -108,7 +124,14 @@ class SessionMonitor:
                 new_pr_url = pull_request.get("html_url") or pull_request.get("url")
 
         # Mark session as completed
-        self.session_repo.mark_session_completed(session_id, new_pr_url)
+        try:
+            self.session_repo.mark_session_completed(session_id, new_pr_url)
+        except (RepositoryError, SessionNotFoundError) as e:
+            logger.error(
+                f"Failed to mark session as completed: {e.message}",
+                extra={"session_id": session_id},
+            )
+            return
 
         # Post comment on original PR if we have the information
         if repo_full_name and original_pr_number:
@@ -152,21 +175,27 @@ class SessionMonitor:
                     "新しいPRのURLを取得できませんでした。"
                 )
 
-            success = await self.github_client.create_comment(
-                owner=owner, repo=repo, issue_number=pr_number, body=comment_body
-            )
-
-            if success:
-                logger.info(
-                    f"Posted completion comment on {repo_full_name}#{pr_number}"
+            try:
+                success = await self.github_client.create_comment(
+                    owner=owner, repo=repo, issue_number=pr_number, body=comment_body
                 )
-            else:
-                logger.warning(
-                    f"Failed to post comment on {repo_full_name}#{pr_number}"
+                if success:
+                    logger.info(
+                        f"Posted completion comment on {repo_full_name}#{pr_number}",
+                        extra={"repo_full_name": repo_full_name, "pr_number": pr_number},
+                    )
+            except GitHubAPIError as e:
+                logger.error(
+                    f"Failed to post comment on {repo_full_name}#{pr_number}: {e.message}",
+                    extra={"repo_full_name": repo_full_name, "pr_number": pr_number},
                 )
 
         except Exception as e:
-            logger.error(f"Error posting completion comment: {e}")
+            logger.error(
+                f"Error posting completion comment: {e}",
+                exc_info=True,
+                extra={"repo_full_name": repo_full_name, "pr_number": pr_number},
+            )
 
     async def run(self):
         """Run the monitor loop."""
